@@ -8,7 +8,7 @@
 [![OpenAI Whisper](https://img.shields.io/badge/OpenAI-Whisper--1-412991?logo=openai&logoColor=white)]()
 [![Anthropic Claude](https://img.shields.io/badge/Anthropic-Claude%20Sonnet-d97757?logo=anthropic&logoColor=white)]()
 
-📺 **デモ動画 / Demo video:** [YOUR_DEMO_VIDEO_URL]
+📺 **デモ動画 / Interactive demo:** https://app.supademo.com/demo/cmoy55rr708bi4qulg4anazog
 
 ![Generated 議事録 preview](docs/preview.png)
 

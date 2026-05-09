@@ -26,4 +26,4 @@ AI議事録ジェネレーター — Next.js + Whisper + Claude で日本のビ�
 
 ## Website (set in repo settings)
 
-[YOUR_DEMO_VIDEO_URL]
+https://app.supademo.com/demo/cmoy55rr708bi4qulg4anazog
