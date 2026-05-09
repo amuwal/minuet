@@ -66,9 +66,16 @@ export function usePipeline() {
       ],
     });
 
+    const ext = audio.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
+    const safePath = `audio-${
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).slice(2)
+    }${ext}`;
+
     let blobUrl: string;
     try {
-      const res = await upload(audio.name, audio, {
+      const res = await upload(safePath, audio, {
         access: "public",
         handleUploadUrl: "/api/blob/upload",
         onUploadProgress: (p) => {

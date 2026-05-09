@@ -37,16 +37,22 @@ export async function POST(req: NextRequest) {
 
   let audioBuffer: Buffer;
   try {
+    console.log(`[process] fetching blob: ${blobUrl}`);
     const audioRes = await fetch(blobUrl);
     if (!audioRes.ok) {
+      console.error(
+        `[process] blob fetch ${audioRes.status} ${audioRes.statusText} for ${blobUrl}`
+      );
       return NextResponse.json(
-        { error: `Failed to fetch blob (HTTP ${audioRes.status})` },
+        { error: `Failed to fetch blob (HTTP ${audioRes.status}) — url: ${blobUrl}` },
         { status: 400 }
       );
     }
     audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    console.log(`[process] blob fetched: ${audioBuffer.length} bytes`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[process] blob fetch threw: ${msg} for ${blobUrl}`);
     return NextResponse.json({ error: `Blob fetch failed: ${msg}` }, { status: 400 });
   }
 
