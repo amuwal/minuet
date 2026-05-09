@@ -1,3 +1,4 @@
+import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCreateAuth } from "@/lib/auth";
 import { encodeEvent, makeEmitter } from "@/lib/events";
@@ -7,6 +8,12 @@ import type { MeetingContext } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+type Body = {
+  blobUrl?: string;
+  fileName?: string;
+  context?: MeetingContext;
+};
+
 export async function POST(req: NextRequest) {
   if (!verifyCreateAuth(req)) {
     return NextResponse.json(
@@ -15,37 +22,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let formData: FormData;
+  let body: Body;
   try {
-    formData = await req.formData();
+    body = (await req.json()) as Body;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const audio = formData.get("audio");
-  const ctxRaw = formData.get("context");
-
-  if (!(audio instanceof File)) {
-    return new Response(JSON.stringify({ error: "audio file is required" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+  const { blobUrl, fileName, context } = body;
+  if (!blobUrl) {
+    return NextResponse.json({ error: "blobUrl is required" }, { status: 400 });
   }
 
-  let context: MeetingContext = {};
-  if (typeof ctxRaw === "string" && ctxRaw.trim()) {
-    try {
-      context = JSON.parse(ctxRaw) as MeetingContext;
-    } catch {
-      return new Response(JSON.stringify({ error: "context must be JSON" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+  let audioBuffer: Buffer;
+  try {
+    const audioRes = await fetch(blobUrl);
+    if (!audioRes.ok) {
+      return NextResponse.json(
+        { error: `Failed to fetch blob (HTTP ${audioRes.status})` },
+        { status: 400 }
+      );
     }
+    audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Blob fetch failed: ${msg}` }, { status: 400 });
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -53,15 +55,22 @@ export async function POST(req: NextRequest) {
       const emit = makeEmitter(controller);
       try {
         const { gijiroku, transcript } = await runPipeline(
-          { audioFile: audio, context },
+          {
+            audioBuffer,
+            audioFilename: fileName ?? "input.bin",
+            context: context ?? {},
+          },
           emit
         );
-        emit({ type: "result", gijiroku, transcript, context });
+        emit({ type: "result", gijiroku, transcript, context: context ?? {} });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         controller.enqueue(encodeEvent({ type: "error", error: msg }));
       } finally {
         controller.close();
+        del(blobUrl).catch(() => {
+          /* best-effort cleanup */
+        });
       }
     },
   });

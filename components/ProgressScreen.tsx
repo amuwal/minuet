@@ -11,6 +11,8 @@ type Props = {
   logs: LogEntry[];
   error: string | null;
   onCancel: () => void;
+  uploading?: boolean;
+  uploadPct?: number;
 };
 
 function phaseIndex(phase: PhaseId | null): number {
@@ -23,9 +25,27 @@ function etaSeconds(progress: number): number {
   return Math.ceil((remaining / 100) * 240);
 }
 
-export default function ProgressScreen({ phase, progress, logs, error, onCancel }: Props) {
+export default function ProgressScreen({
+  phase,
+  progress,
+  logs,
+  error,
+  onCancel,
+  uploading,
+  uploadPct,
+}: Props) {
   const idx = phaseIndex(phase);
   const logRef = useRef<HTMLDivElement>(null);
+  const displayProgress = uploading ? Math.min(uploadPct ?? 0, 99) : progress;
+  const displayLabel = error
+    ? "エラー"
+    : uploading
+      ? "アップロード中…"
+      : phase
+        ? PHASES[idx].label
+        : progress >= 100
+          ? "完了"
+          : "準備中";
 
   useEffect(() => {
     if (logRef.current) {
@@ -46,14 +66,18 @@ export default function ProgressScreen({ phase, progress, logs, error, onCancel 
       <div className="progress-card">
         <div className="row-spread" style={{ marginBottom: 6 }}>
           <span className="jp" style={{ fontWeight: 600, fontSize: 14 }}>
-            {phase ? PHASES[idx].label : progress >= 100 ? "完了" : "準備中"}
+            {displayLabel}
           </span>
           <span className="progress-eta">
-            {error ? "—" : `ETA ${etaSeconds(progress)}s`}
+            {error
+              ? "—"
+              : uploading
+                ? `${uploadPct ?? 0}%`
+                : `ETA ${etaSeconds(progress)}s`}
           </span>
         </div>
         <div className="progress-bar">
-          <i style={{ width: `${progress}%` }} />
+          <i style={{ width: `${displayProgress}%` }} />
         </div>
 
         <div className="phases">

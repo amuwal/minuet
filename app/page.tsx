@@ -50,7 +50,13 @@ export default function Page() {
   });
 
   function goToStep(i: number) {
-    if (i === 2 && (!uploaded || pipeline.state.status === "running")) return;
+    if (
+      i === 2 &&
+      (!uploaded ||
+        pipeline.state.status === "running" ||
+        pipeline.state.status === "uploading")
+    )
+      return;
     if (i === 3 && pipeline.state.status !== "done") return;
     setStep(i);
   }
@@ -106,6 +112,8 @@ export default function Page() {
             logs={pipeline.state.logs}
             error={pipeline.state.error}
             onCancel={cancelPipeline}
+            uploading={pipeline.state.status === "uploading"}
+            uploadPct={pipeline.state.uploadPct}
           />
         )}
         {step === 3 && editedGijiroku && pipeline.state.result && (
@@ -174,6 +182,11 @@ export default function Page() {
           info={
             pipeline.state.error ? (
               <>処理に失敗しました</>
+            ) : pipeline.state.status === "uploading" ? (
+              <>
+                Vercel Blob にアップロード中 ·{" "}
+                <span className="mono">{pipeline.state.uploadPct}%</span>
+              </>
             ) : (
               <>
                 所要時間：通常 3〜4分 ·{" "}

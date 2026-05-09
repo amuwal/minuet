@@ -1,19 +1,22 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useCallback, useRef, useState } from "react";
 import type { PhaseId } from "@/lib/constants";
 import type { LogLevel, PipelineEvent } from "@/lib/events";
+import { nowJpTimestamp } from "@/lib/parse";
 import type { Gijiroku, MeetingContext, Transcript } from "@/lib/types";
 
 export type LogEntry = { ts: string; lvl: LogLevel; msg: string };
 
 export type PipelineState = {
-  status: "idle" | "running" | "done" | "error";
+  status: "idle" | "uploading" | "running" | "done" | "error";
   phase: PhaseId | null;
   progress: number;
   logs: LogEntry[];
   result: { gijiroku: Gijiroku; transcript: Transcript } | null;
   error: string | null;
+  uploadPct: number;
 };
 
 const INITIAL: PipelineState = {
@@ -23,7 +26,12 @@ const INITIAL: PipelineState = {
   logs: [],
   result: null,
   error: null,
+  uploadPct: 0,
 };
+
+function fmtMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1) + "MB";
+}
 
 export function usePipeline() {
   const [state, setState] = useState<PipelineState>(INITIAL);
@@ -46,17 +54,55 @@ export function usePipeline() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    setState({ ...INITIAL, status: "running" });
+    setState({
+      ...INITIAL,
+      status: "uploading",
+      logs: [
+        {
+          ts: nowJpTimestamp(),
+          lvl: "info",
+          msg: `Vercel Blob: ${audio.name} (${fmtMb(audio.size)}) をアップロード中…`,
+        },
+      ],
+    });
 
-    const fd = new FormData();
-    fd.append("audio", audio);
-    fd.append("context", JSON.stringify(context));
+    let blobUrl: string;
+    try {
+      const res = await upload(audio.name, audio, {
+        access: "public",
+        handleUploadUrl: "/api/blob/upload",
+        onUploadProgress: (p) => {
+          setState((s) => ({ ...s, uploadPct: Math.round(p.percentage) }));
+        },
+      });
+      blobUrl = res.url;
+    } catch (err) {
+      if (ctrl.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      setState((p) => ({ ...p, status: "error", error: `アップロードに失敗しました: ${msg}` }));
+      return;
+    }
+
+    setState((p) => ({
+      ...p,
+      status: "running",
+      uploadPct: 100,
+      logs: [
+        ...p.logs,
+        {
+          ts: nowJpTimestamp(),
+          lvl: "ok",
+          msg: "アップロード完了 — 文字起こしを開始します",
+        },
+      ],
+    }));
 
     let res: Response;
     try {
       res = await fetch("/api/process", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl, fileName: audio.name, context }),
         signal: ctrl.signal,
       });
     } catch (err) {
@@ -105,7 +151,10 @@ export function usePipeline() {
   return { state, run, cancel, reset };
 }
 
-function handleEvent(evt: PipelineEvent, setState: React.Dispatch<React.SetStateAction<PipelineState>>) {
+function handleEvent(
+  evt: PipelineEvent,
+  setState: React.Dispatch<React.SetStateAction<PipelineState>>
+) {
   switch (evt.type) {
     case "phase":
       setState((p) => ({ ...p, phase: evt.phase }));

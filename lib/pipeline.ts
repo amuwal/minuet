@@ -9,7 +9,8 @@ import type { Gijiroku, MeetingContext, Transcript } from "@/lib/types";
 import { transcribeChunks } from "@/lib/whisper";
 
 export type PipelineInput = {
-  audioFile: File;
+  audioBuffer: Buffer;
+  audioFilename: string;
   context: MeetingContext;
 };
 
@@ -38,12 +39,11 @@ export async function runPipeline(
     emit({ type: "phase", phase: "chunk" });
     emit({ type: "progress", pct: PHASE_RANGES.chunk.from });
 
-    const ext = path.extname(input.audioFile.name) || ".bin";
+    const ext = path.extname(input.audioFilename) || ".bin";
     const inputPath = path.join(work.dir, `input${ext}`);
-    const inBuf = Buffer.from(await input.audioFile.arrayBuffer());
-    await writeFile(inputPath, inBuf);
+    await writeFile(inputPath, input.audioBuffer);
 
-    log("info", `input: ${input.audioFile.name} (${fmtMb(inBuf.length)})`);
+    log("info", `input: ${input.audioFilename} (${fmtMb(input.audioBuffer.length)})`);
     log("info", "ffmpeg: 16kHz mono mp3 96kbps へ正規化中…");
 
     const { normalizedPath, durationSec, chunks } = await prepareAndChunk(
@@ -54,7 +54,7 @@ export async function runPipeline(
 
     log(
       "ok",
-      `正規化完了: ${fmtMb(inBuf.length)} → ${fmtMb(normSize)} · 長さ ${(durationSec / 60).toFixed(1)}分`
+      `正規化完了: ${fmtMb(input.audioBuffer.length)} → ${fmtMb(normSize)} · 長さ ${(durationSec / 60).toFixed(1)}分`
     );
     log("ok", `${chunks.length} チャンクに分割（無音検出ベース）`);
     emit({ type: "progress", pct: PHASE_RANGES.chunk.to });
